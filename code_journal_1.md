@@ -44,15 +44,15 @@ Cargo creates a new folder named PROJECT_NAME with some files and folders inside
 
 `use` is similar to import in other programming languages. In this case we're importing the struct `state` and the const `STATE` that are in the state.rs file so we can use them in our smart contract without passing the complete path.
 
-> use crate::state::{State, STATE};
+    use crate::state::{State, STATE};
 
 `const` is the short for constant and is used to define values in our contract that won't change. For naming convenction, we should use uppercase and separate words with `_`. It's always necessary to define the type with `:`,in this case is a `String` slice.
 
-> const CONTRACT_NAME: &str = "crates.io:cw-template";
+    const CONTRACT_NAME: &str = "crates.io:cw-template";
 
 This is a macro to define that the following function will be an entry point for the program. `entry_point` are exposed to the blockchain and can be interacted with.
 
-> #[cfg_attr(not(feature = "library"), entry_point)]
+    #[cfg_attr(not(feature = "library"), entry_point)]
 
 `instantiate` is a public function that's accesible from other files outside this contract. It's similar to a constructor function in other programming languages. Basically, it's used to initialize the contract with the default values after deployment in the blockchain. The values inside `()` are the variables we pass to the function so they can be used inside its scope. We always need to specify its type and we're going to talk about them below. The `->` tells what type of output the function should return, in this case, it's either a `Response` when everything goes as planned or a `ContractError` if something went wrong, wrapped in a Result type to contain the error and not cause a kernel panic. Then, the actual commands of the function are found inside the `{}` which are explained below line by line.
 
@@ -65,19 +65,19 @@ This is a macro to define that the following function will be an entry point for
 
 `deps` is short for dependencies and there're of type `DepsMut`, which means there're mutable (their value can be changed or mutated). We usually pass dependecies to access storage.
 
-> deps: DepsMut,
+    deps: DepsMut,
 
 `env` is short for environment and this is where the blockchain state is usually maintained. Things like block `time`, `height`, `chain_id` etc. are stored inside `env`. In this case there's a `_` before the variable to tell the compiler we're not using this variable inside the function, so there's no warning at compile time. There's no use in passing variables we're not going to use inside the function, but this time we do it to keep things standardised.
 
-> \_env: Env,
+    \_env: Env,
 
 `info` is short for information and is of type `MessageInfo`. It's a struct that contains the `sender` which signed the transaction and the `funds` that are sent to the contract.
 
-> info: MessageInfo,
+    info: MessageInfo,
 
 `msg` is short for message and is of type `InstantiateMsg`. This is a custom type we previously defined in the msg.rs file and will contain the fields needed to intantiate the contract. In our case we need to pass the value at which we want to initialise the counter.
 
-> msg: InstantiateMsg,
+    msg: InstantiateMsg,
 
 `let` is the keyword we use to define a variable in Rust. Variables are immutable by default until we say otherwise. In this case we're defining a variable `state` which is of type `State` and has two fields: `count` and `owner`. We get the `count` from the value passed in the `msg` and the owner in this case is whoever signs the transaction, `info.sender`. Note that we `.clone` the value because we use it later when adding attributes to the `Response`. and in Rust, there can only be one owner of a variable at a time.
 
@@ -88,11 +88,11 @@ This is a macro to define that the following function will be an entry point for
 
 The `set_contract_version( ... )` function is used when we instantiate the contract to store the original version in the blockchain so we can then migrate it if changes in the code are needed. We pass as parameters `deps.storage` to save configuration on-chain, also `CONTRACT_NAME` and `CONTRACT_VERSION` constants defined before.
 
-> set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+    set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
 `STATE.save( ... )` is used to store the state of the contract that we just defined on-chain. We pass `deps.storage` to give the contract mutable access to storage and `&state` to save the initial configuration. Note that we use `&` in this case, which means we are borrowing the variable `state` so we don't own it (cannot be modified). There's also a `?` which is used in Rust to handle errors. If something went wrong, we'll return a `ContractError` wrapped in a `Result`.
 
-> STATE.save(deps.storage, &state)?;
+    STATE.save(deps.storage, &state)?;
 
 If anything broke before, it means that the function didn't throw any errors so we should return an `Ok(Response::new() ... )` with some attributes to help index the transaction later on. The attributes we pass are discretionary and should be related to what the function did, in this case, we define a `method` called `instantiate` and add the `owner` and `count` we just set.
 
@@ -102,7 +102,7 @@ If anything broke before, it means that the function didn't throw any errors so 
         .add_attribute("count", msg.count.to_string()))
     }
 
-The `pub fn execute( ... )` function is similar to the instantiate function but is a bit more complex as it contains all possible executable messages our contract needs to handle.
+The `pub fn execute( ... )` function is similar to `instantiate` but is a bit more complex as it contains all possible executable messages our contract needs to handle. `match` can be used to run code conditionally (controls flow based on pattern matching). Every pattern must be handled exhaustively, either explicitly or by using wildcards like `_`. In our case, the contract has only two possible `ExecuteMsg`: `Increment` and `Reset`. For each message, we map it to its respective function using the `=>` followed by the function name and passing the corresponding parameters.
 
     #[cfg_attr(not(feature = "library"), entry_point)]
     pub fn execute(
@@ -115,4 +115,29 @@ The `pub fn execute( ... )` function is similar to the instantiate function but 
             ExecuteMsg::Increment {} => execute::increment(deps),
             ExecuteMsg::Reset { count } => execute::reset(deps, info, count),
         }
+    }
+
+`mod` is used to organise code into modules. In order to use the `execute` module from other crates we need add the `pub` keyword.
+
+    pub mod execute { ... }
+
+`use super::*` is a wildcard import and is implemented to bring in everything from the parent module.
+
+    use super::*;
+
+The `increment` function takes the dependencies as mutable and returns a `Result` wrapping either a `Response` or a `ContractError`. We update the `STATE` on chain, defined as `mut`, with the previous value of `state.count` incremented by `1`. If there are no errors, we return the `state` wrapped in a `Result` and add an attribute to be able to index it later; the `?` handles the error if any.
+
+    pub fn increment(deps: DepsMut) -> Result<Response, ContractError> {
+        STATE.update(deps.storage, |mut state| -> Result<_, ContractError> {
+            state.count += 1;
+            Ok(state)
+        })?;
+
+        Ok(Response::new().add_attribute("action", "increment"))
+    }
+
+Only the owner of the contract is allowed to reset the counter. If the `sender` is not the `owner`, we throw an error and stop processing the remaining instructions in the function. We should always check for errors first to avoid doing further calculations and save on gas / time.
+
+    if info.sender != state.owner {
+        return Err(ContractError::Unauthorized {});
     }
