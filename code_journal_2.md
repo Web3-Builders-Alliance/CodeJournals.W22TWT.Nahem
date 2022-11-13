@@ -239,50 +239,6 @@ The `query_admin_list` function loads the `ADMIN_LIST` from storage and returns 
         })
     }
 
-### Tests
-
-Writing unit tests when developing smart contracts is very useful because they help us verify that the functions we wrote do what they should.
-
-We need to import some structures that simulate the state of the blockchain, create a fake storage and simulate the user signing the transaction and sending funds. This is all achieved using the testing module from the standard library of CosmWasm and must only be used for testing purposes.
-
-    use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
-
-First, we create a mutable variable `deps` and assign to it to the result from the `mock_dependencies()` function, which creates all external requirements that can be injected for unit tests.
-
-        let mut deps = mock_dependencies();
-
-Also, we create a variable named `msg` that simulates the `InstantiateMsg` with an arbitrary number for `count`.
-
-    let msg = InstantiateMsg { count: 17 };
-
-We simulate a dummy user `creator` who sends `1000 earth` coins to the contract address.
-
-    let info = mock_info("creator", &coins(1000, "earth"));
-
-Then we call the instantiate( ... ) functions passing all variables previously defined and save the result to a variable `res`, short from response. We call the `unwrap()` method to make sure the function returns an Ok value, but if there's an error we want the test to fail.
-
-    let res = instantiate(deps.as_mut(), mock_env(), info, msg).unwrap();
-
-`assert_eq!( ... , ... )` compares both values and panics if they're different. This is very useful to check that the expected response from the `instantiate` function matches the value we hardcoded before in the `InstantiateMsg { count: 17 }` we passed. If anything panics then the test will pass.
-
-    assert_eq!(0, res.messages.len());
-
-We now double check that the instantiate function is properly working. For that, we'll use the `query` fucntion passing the `GetCount` parameter, unwrap it to make sure if doesn't fail, and then we need to convert it back `from_binary` to be able to compare the value obtained with the hardcoded `count` previously set. The dependencies are passed as reference when querying the contract because we don't need to modify blockchain state.
-
-    let res = query(deps.as_ref(), mock_env(), QueryMsg::GetCount {}).unwrap();
-    let value: GetCountResponse = from_binary(&res).unwrap();
-    assert_eq!(17, value.count);
-
-Once we check that `instantiate()` works fine, we do the same for `increment()` and `reset()`. Bear in mind that we need to `instantiate()` the contract before we can either use the `increment()` or `reset()` functions. We should also check that the contract returns an error when trying to reset the counter when the sender is different from the contract owner.
-
-    let unauth_info = mock_info("anyone", &coins(2, "token"));
-    let msg = ExecuteMsg::Reset { count: 5 };
-    let res = execute(deps.as_mut(), mock_env(), unauth_info, msg);
-    match res {
-        Err(ContractError::Unauthorized {}) => {}
-        _ => panic!("Must return unauthorized error"),
-    }
-
 ## Improvements
 
 This is a very basic contract that needs to be tweaked a little bit in order to make it useful. It's meant to be used as a skeleton to have the structure ready to add some extra custom logic to it.
