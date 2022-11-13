@@ -34,13 +34,13 @@ Cargo creates a new folder named PROJECT_NAME with some files and folders inside
 
    4. If we want to keep our code clean, we might want to use helper functions to not repeat ourselves too much. We can create functions here that will be used along the contract here and import them later on.
 
-   5. The integration_tests.rs file is used to test that our smart contract behaves as it should (or as we think it should). We must write tests to check if our program is actually doing what we think we want, and fix bugs until it does. It's impossible to test every scenario, but it's always a good practice to test core fucntionallity and interaction between parts of our contract.
+   5. The integration_tests.rs file is used to test that our smart contract behaves as it should (or as we think it should). We must write tests to check if our program is actually doing what we think we want, and fix bugs until it does. It's impossible to test every scenario, but it's always a good practice to test core functionallity and interaction between parts of our contract.
 
    6. The lib.rs file works like an index. It tells cargo how ours files and folders are structured so we can import them into our contract files. We'll have to manually add to it as we create new files and folders to our smart contract.
 
    7. We define the messages we're going to be using in the contract in the msg.rs file. Messages are usually structs or enums, depending on the case. Responses from queries are defined here too.
 
-   8. The state.rs file is where we define how we're going to keep the state of our contract. Usually, we define here the `state` as a struct and then a `STATE` constant that's going to wrap the `state` either in an Item or a Map, depending on the logic of our cotnract. This is going to be stored on-chain and we can query it, update it or create new instances.
+   8. The state.rs file is where we define how we're going to keep the state of our contract. Usually, we define here the `state` as a struct and then a `STATE` constant that's going to wrap the `state` either in an Item or a Map, depending on the logic of our contract. This is going to be stored on-chain and we can query it, update it or create new instances.
 
 4. The .editorconfig file is used to format the workspace.
 
@@ -202,7 +202,7 @@ Then we call the instantiate( ... ) functions passing all variables previously d
 
     assert_eq!(0, res.messages.len());
 
-We now double check that the instantiate function is properly working. For that, we'll use the `query` fucntion passing the `GetCount` parameter, unwrap it to make sure if doesn't fail, and then we need to convert it back `from_binary` to be able to compare the value obtained with the hardcoded `count` previously set. The dependencies are passed as reference when querying the contract because we don't need to modify blockchain state.
+We now double check that the instantiate function is properly working. For that, we'll use the `query` function passing the `GetCount` parameter, unwrap it to make sure if doesn't fail, and then we need to convert it back `from_binary` to be able to compare the value obtained with the hardcoded `count` previously set. The dependencies are passed as reference when querying the contract because we don't need to modify blockchain state.
 
     let res = query(deps.as_ref(), mock_env(), QueryMsg::GetCount {}).unwrap();
     let value: GetCountResponse = from_binary(&res).unwrap();
