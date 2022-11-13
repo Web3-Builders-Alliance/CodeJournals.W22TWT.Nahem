@@ -6,6 +6,16 @@ To create a project using cargo from an specific Github repo, run the following 
 
 This time we're using the cw-template from the CosmWasm repo with full features (the non-minimal version).
 
+## Mechanism
+
+The smart contract is basically a counter app that keeps its state on-chain.
+
+It can be either incremented by `1` by anyone or reset to an arbitrary number by the contract owner only.
+
+Anyone can query the current value of the counter.
+
+The tests check that all functions (instantiate, increment, reset and query_count) work as they should but also check that the contract throws an error when anyone different from the owner tries to reset the count.
+
 ## Organisation
 
 Cargo creates a new folder named PROJECT_NAME with some files and folders inside. Here's a short description of the most relevant files/folders that cargo creates for us.
@@ -40,19 +50,21 @@ Cargo creates a new folder named PROJECT_NAME with some files and folders inside
 
 7. Cargo.toml is where we want to include our dependencies. As we need to use external crates or packages, we should manually add them under `[dependencies]`. **Tip**: you can use VSCODE extension called Better TOML to format the files with .toml extension.
 
-## Code
+## Contract
 
 `use` is similar to import in other programming languages. In this case we're importing the struct `state` and the const `STATE` that are in the state.rs file so we can use them in our smart contract without passing the complete path.
 
     use crate::state::{State, STATE};
 
-`const` is the short for constant and is used to define values in our contract that won't change. For naming convenction, we should use uppercase and separate words with `_`. It's always necessary to define the type with `:`,in this case is a `String` slice.
+`const` is the short for constant and is used to define values in our contract that won't change. For naming convention, we should use uppercase and separate words with `_`. It's always necessary to define the type with `:`,in this case is a `String` slice.
 
     const CONTRACT_NAME: &str = "crates.io:cw-template";
 
 This is a macro to define that the following function will be an entry point for the program. `entry_point` are exposed to the blockchain and can be interacted with.
 
     #[cfg_attr(not(feature = "library"), entry_point)]
+
+### Instantiate
 
 `instantiate` is a public function that's accesible from other files outside this contract. It's similar to a constructor function in other programming languages. Basically, it's used to initialize the contract with the default values after deployment in the blockchain. The values inside `()` are the variables we pass to the function so they can be used inside its scope. We always need to specify its type and we're going to talk about them below. The `->` tells what type of output the function should return, in this case, it's either a `Response` when everything goes as planned or a `ContractError` if something went wrong, wrapped in a Result type to contain the error and not cause a kernel panic. Then, the actual commands of the function are found inside the `{}` which are explained below line by line.
 
@@ -102,6 +114,8 @@ If anything broke before, it means that the function didn't throw any errors so 
         .add_attribute("count", msg.count.to_string()))
     }
 
+### Execute
+
 The `pub fn execute( ... )` function is similar to `instantiate` but is a bit more complex as it contains all possible executable messages our contract needs to handle. `match` can be used to run code conditionally (controls flow based on pattern matching). Every pattern must be handled exhaustively, either explicitly or by using wildcards like `_`. In our case, the contract has only two possible `ExecuteMsg`: `Increment` and `Reset`. For each message, we map it to its respective function using the `=>` followed by the function name and passing the corresponding parameters.
 
     #[cfg_attr(not(feature = "library"), entry_point)]
@@ -141,3 +155,81 @@ Only the owner of the contract is allowed to reset the counter. If the `sender` 
     if info.sender != state.owner {
         return Err(ContractError::Unauthorized {});
     }
+
+### Query
+
+The `query( ... )` function is similar to the `execute( ... )` function but there're two main differences. First, because it's used to query the state, dependencies don't need to be mutable, think of it as a read-only function. And last, instead of returning a `Response`, it returns a `StdResult` wrapping a `Binary`, which in turn is a wrapper around a vector that adds `base64` de/serialization with `serde`.
+
+    #[cfg_attr(not(feature = "library"), entry_point)]
+    pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
+        match msg {
+            QueryMsg::GetCount {} => to_binary(&query::count(deps)?),
+        }
+    }
+
+Because we don't need to `save` or `update` the blockchain state when using a query, we use `load` instead and pass the dependencies to the function. If there was nothing to load, the `?` will handle the error safely. We previously defined a struct called `GetCountResponse` in the msg.rs crate that returns the `count` with it.
+
+    pub fn count(deps: Deps) -> StdResult<GetCountResponse> {
+        let state = STATE.load(deps.storage)?;
+        Ok(GetCountResponse { count: state.count })
+    }
+
+### Tests
+
+Writing unit tests when developing smart contracts is very useful because they help us verify that the functions we wrote do what they should.
+
+We need to import some structures that simulate the state of the blockchain, create a fake storage and simulate the user signing the transaction and sending funds. This is all achieved using the testing module from the standard library of CosmWasm and must only be used for testing purposes.
+
+    use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
+
+First, we create a mutable variable `deps` and assign to it to the result from the `mock_dependencies()` function, which creates all external requirements that can be injected for unit tests.
+
+        let mut deps = mock_dependencies();
+
+Also, we create a variable named `msg` that simulates the `InstantiateMsg` with an arbitrary number for `count`.
+
+    let msg = InstantiateMsg { count: 17 };
+
+We simulate a dummy user `creator` who sends `1000 earth` coins to the contract address.
+
+    let info = mock_info("creator", &coins(1000, "earth"));
+
+Then we call the instantiate( ... ) functions passing all variables previously defined and save the result to a variable `res`, short from response. We call the `unwrap()` method to make sure the function returns an Ok value, but if there's an error we want the test to fail.
+
+    let res = instantiate(deps.as_mut(), mock_env(), info, msg).unwrap();
+
+`assert_eq!( ... , ... )` compares both values and panics if they're different. This is very useful to check that the expected response from the `instantiate` function matches the value we hardcoded before in the `InstantiateMsg { count: 17 }` we passed. If anything panics then the test will pass.
+
+    assert_eq!(0, res.messages.len());
+
+We now double check that the instantiate function is properly working. For that, we'll use the `query` fucntion passing the `GetCount` parameter, unwrap it to make sure if doesn't fail, and then we need to convert it back `from_binary` to be able to compare the value obtained with the hardcoded `count` previously set. The dependencies are passed as reference when querying the contract because we don't need to modify blockchain state.
+
+    let res = query(deps.as_ref(), mock_env(), QueryMsg::GetCount {}).unwrap();
+    let value: GetCountResponse = from_binary(&res).unwrap();
+    assert_eq!(17, value.count);
+
+Once we check that `instantiate()` works fine, we do the same for `increment()` and `reset()`. Bear in mind that we need to `instantiate()` the contract before we can either use the `increment()` or `reset()` functions. We should also check that the contract returns an error when trying to reset the counter when the sender is different from the contract owner.
+
+    let unauth_info = mock_info("anyone", &coins(2, "token"));
+    let msg = ExecuteMsg::Reset { count: 5 };
+    let res = execute(deps.as_mut(), mock_env(), unauth_info, msg);
+    match res {
+        Err(ContractError::Unauthorized {}) => {}
+        _ => panic!("Must return unauthorized error"),
+    }
+
+## Improvements
+
+This is a very basic contract and is not optimised or organised in the best way posible.
+
+1. The contract.rs crate can be simplified a litle bit more, moving the `execute`, `query` and `tests` modules to independent crates and importing them at the very top of the contract.
+
+2. We can always check for more cases for failure, for example, making sure that we don't overflow the counter when adding `1` to the maximum value `i32` allows.
+
+3. More functionality can also be added, like decrementing the counter or even allowing incrementing it by an arbitrary number instead of `1`.
+
+4. The error `Unauthorized` can be more specific, telling that only the owner of the contract can reset the count. Also, when doing more checks for failure, more specific errors can be added to the error.rs crate.
+
+5. After incrementing or resetting the count, we could add the current count as an attribute to the `Response`.
+
+6. We could also check that the attributes sent in the response of all functions are what we expect to receive.
