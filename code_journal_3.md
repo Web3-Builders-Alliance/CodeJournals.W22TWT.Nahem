@@ -1,7 +1,8 @@
 # White-Whale-Defi-Platform/migaloo-core
 
-TerraSwap Factory
-Migaloo's factory contract is used to create pair (pool) contracts. Pools are comprised of two tokens, which can be either native, ibc or cw20 tokens. Once a pool is created it's stored in state, meaning the factory acts as a pool registry, which can be queried for reference. Note that the pool factory is permissioned, meaning the messages can only be executed by the owner of the contract.
+## TerraSwap Factory
+
+Migaloo's factory contract is used to create pair (pool) contracts. Pools are comprised of two tokens, which can be either native, ibc or cw20 tokens. Once a pool is created it's stored in state, meaning the factory acts as a pool registry, which can be queried later for reference. Note that the pool factory is permissioned, meaning the messages can only be executed by the owner of the contract.
 
 To create a project using cargo from an specific Github repo, run the following command:
 
