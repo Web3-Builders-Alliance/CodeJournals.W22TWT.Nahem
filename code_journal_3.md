@@ -12,7 +12,7 @@ This time we're using the migaloo-core from the White-Whale-Defi-Platform repo, 
 
 ## Mechanism
 
-The smart contract is basically a counter app that keeps its state on-chain.
+The smart contract is basically defining the commands that can be use alongside the smart cotnracts.
 
 It can be either incremented by `1` by anyone or reset to an arbitrary number by the contract owner only.
 
